@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="110" fill="#111827"/>
-  <text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" font-family="Arial Black, Arial" font-size="138" fill="#fff">FLIP</text>
-  <text x="74%" y="57%" dominant-baseline="middle" text-anchor="middle" font-family="Arial Black, Arial" font-size="170" fill="#facc15">7</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#080713"/><circle cx="256" cy="256" r="190" fill="#7c3cff" opacity=".25"/><text x="72" y="300" font-size="126" font-family="Arial Black,Arial" font-style="italic" fill="#fff">FLIP</text><text x="337" y="300" font-size="150" font-family="Arial Black,Arial" font-style="italic" fill="#ffd21f">7</text></svg>

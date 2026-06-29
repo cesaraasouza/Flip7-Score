@@ -3,68 +3,89 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#070b15" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Flip7" />
-  <title>Flip7 Placar</title>
+  <meta name="theme-color" content="#080713" />
+  <title>Flip 7 Score</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="app-shell">
+  <div id="app" class="app-shell">
     <header class="topbar">
-      <button id="backBtn" class="icon-btn" aria-label="Voltar">‹</button>
-      <div class="brand">
-        <div class="logo">FLIP<span>7</span></div>
-        <div id="screenTitle" class="screen-title">Participantes</div>
-      </div>
-      <button id="resetBtn" class="icon-btn" aria-label="Nova partida">↻</button>
+      <button class="icon-btn" id="backBtn" aria-label="Voltar">‹</button>
+      <div class="brand" role="img" aria-label="Flip 7">FLIP<span>7</span></div>
+      <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
     </header>
 
-    <section id="participantsScreen" class="screen active" aria-labelledby="screenTitle">
-      <div class="flow-card">
-        <div class="step active">1</div><div></div><div class="step">2</div><div></div><div class="step">3</div>
-      </div>
-      <p class="subtitle">Adicione os participantes antes de iniciar.</p>
-      <div id="playersList" class="list"></div>
-      <form id="addPlayerForm" class="add-row">
-        <input id="playerNameInput" class="text-input" placeholder="Nome do participante" autocomplete="off" />
-        <button id="addPlayerBtn" class="small-btn" type="submit">+</button>
-      </form>
-      <button id="startGameBtn" class="primary-btn">▶ Iniciar partida</button>
-    </section>
+    <main>
+      <section class="screen active" id="participantsScreen" data-title="Participantes">
+        <div class="screen-title">
+          <h1>Participantes</h1>
+          <p>Digite os nomes para começar.</p>
+        </div>
+        <div class="card participant-add">
+          <input id="participantName" autocomplete="off" placeholder="Nome do participante" />
+          <button id="addParticipantBtn" class="btn secondary">Adicionar</button>
+        </div>
+        <div id="participantsList" class="list"></div>
+        <button id="startGameBtn" class="btn primary wide">▶ Iniciar partida</button>
+      </section>
 
-    <section id="rankingScreen" class="screen" aria-labelledby="screenTitle">
-      <div class="game-meta">
-        <div><strong id="roundNumber">Rodada 1</strong><span>partida em andamento</span></div>
-        <button id="undoBtn" class="ghost-btn">↩ Desfazer</button>
-      </div>
-      <p class="subtitle">Deixe essa tela aberta para todos enxergarem o placar.</p>
-      <div id="winnerBanner" class="winner-banner hidden"></div>
-      <div id="rankingList" class="ranking-list"></div>
-      <button id="endRoundBtn" class="success-btn">✎ Encerrar rodada</button>
-    </section>
+      <section class="screen" id="rankingScreen" data-title="Ranking">
+        <div class="round-pill">Rodada <span id="roundNumber">1</span></div>
+        <div id="leaderBanner" class="leader-banner hidden"></div>
+        <div id="rankingList" class="ranking-table"></div>
+        <div class="action-grid">
+          <button id="goRoundBtn" class="btn gold wide">Encerrar rodada</button>
+          <button id="goHistoryBtn" class="btn outline">▦ Histórico</button>
+          <button id="undoBtn" class="btn outline">↶ Desfazer</button>
+        </div>
+        <p class="hint center">Primeiro a 200 pontos vence.</p>
+      </section>
 
-    <section id="roundScreen" class="screen" aria-labelledby="screenTitle">
-      <div class="flow-card">
-        <div class="step done">1</div><div class="done-line"></div><div class="step done">2</div><div></div><div class="step active">3</div>
-      </div>
-      <p class="subtitle">Digite os pontos da rodada. Marque “estourou” para quem não pontuou.</p>
-      <div id="roundInputs" class="round-list"></div>
-      <div class="tip-card">
-        <strong>Lembrete</strong><br />
-        Ao marcar “estourou”, o jogador recebe 0 ponto nesta rodada.
-      </div>
-      <button id="saveRoundBtn" class="success-btn">✓ Salvar e atualizar ranking</button>
-    </section>
+      <section class="screen" id="roundScreen" data-title="Encerrar Rodada">
+        <div class="screen-title compact">
+          <h1>Encerrar rodada</h1>
+          <p>Rodada <span id="roundInputNumber">1</span> · Digite os pontos.</p>
+        </div>
+        <div id="scoreInputs" class="score-list"></div>
+        <div class="note">💣 toque na bombinha para quem estourou.</div>
+        <button id="saveRoundBtn" class="btn success wide">✓ Salvar e atualizar</button>
+      </section>
 
-    <nav class="bottom-nav" aria-label="Navegação principal">
-      <button data-screen="participants" class="nav-item active">👥<span>Participantes</span></button>
-      <button data-screen="ranking" class="nav-item">🏆<span>Ranking</span></button>
-      <button data-screen="round" class="nav-item">✎<span>Rodada</span></button>
+      <section class="screen" id="feedbackScreen" data-title="Feedback">
+        <div class="celebration" id="celebrationIcon">👑</div>
+        <h1 id="feedbackTitle" class="feedback-title">Nova líder!</h1>
+        <p id="feedbackText" class="feedback-text"></p>
+        <div id="feedbackRanking" class="mini-ranking"></div>
+        <button id="continueBtn" class="btn primary wide">Continuar</button>
+        <button id="feedbackHistoryBtn" class="btn ghost wide">Ver histórico</button>
+      </section>
+
+      <section class="screen" id="historyScreen" data-title="Histórico">
+        <div class="screen-title compact">
+          <h1>Histórico</h1>
+          <p>Todas as rodadas da partida.</p>
+        </div>
+        <div class="history-wrap">
+          <table id="historyTable" class="history-table"></table>
+        </div>
+        <button id="backRankingBtn" class="btn primary wide">Voltar ao ranking</button>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button data-target="participantsScreen">👥<span>Participantes</span></button>
+      <button data-target="rankingScreen">🏆<span>Ranking</span></button>
+      <button data-target="roundScreen">✏️<span>Rodada</span></button>
+      <button data-target="historyScreen">▦<span>Histórico</span></button>
     </nav>
-  </main>
+  </div>
+
+  <dialog id="menuDialog">
+    <h2>Partida</h2>
+    <button id="resetGameBtn" class="btn danger wide">Zerar partida</button>
+    <button id="closeMenuBtn" class="btn outline wide">Fechar</button>
+  </dialog>
 
   <script src="app.js"></script>
 </body>

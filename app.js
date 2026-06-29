@@ -1,153 +1,24 @@
-const STORAGE_KEY = 'flip7-scoreboard-spa-v2';
-let state = loadState();
-let currentScreen = state.players.length ? 'ranking' : 'participants';
-
-const titles = { participants: 'Participantes', ranking: 'Ranking', round: 'Encerrar rodada' };
-const colors = ['#8b5cf6', '#3b82f6', '#22c55e', '#f97316', '#ec4899', '#14b8a6', '#eab308', '#ef4444'];
-const $ = (id) => document.getElementById(id);
-
-function defaultState() { return { players: [], round: {}, history: [] }; }
-function loadState() {
-  try { return { ...defaultState(), ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) }; }
-  catch { return defaultState(); }
-}
-function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function uid() { return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()); }
-function sortedPlayers() { return [...state.players].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)); }
-function roundNumber() { return state.history.length + 1; }
-
-function setScreen(screen) {
-  if ((screen === 'ranking' || screen === 'round') && state.players.length === 0) screen = 'participants';
-  currentScreen = screen;
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  $(`${screen}Screen`).classList.add('active');
-  $('screenTitle').textContent = titles[screen];
-  document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.screen === screen));
-  $('backBtn').style.visibility = screen === 'participants' ? 'hidden' : 'visible';
-  render();
-}
-
-function render() { renderPlayers(); renderRanking(); renderRound(); }
-
-function renderPlayers() {
-  $('playersList').innerHTML = state.players.map((p, i) => `
-    <div class="player-row">
-      <div class="avatar" style="background:${colors[i % colors.length]}">👤</div>
-      <div class="player-name">${escapeHtml(p.name)}</div>
-      <button class="delete-btn" data-delete="${p.id}" aria-label="Remover ${escapeHtml(p.name)}">×</button>
-    </div>`).join('');
-  $('startGameBtn').disabled = state.players.length === 0;
-}
-
-function renderRanking() {
-  $('roundNumber').textContent = `Rodada ${roundNumber()}`;
-  $('undoBtn').disabled = state.history.length === 0;
-  const players = sortedPlayers();
-  const winner = players.find(p => p.score >= 200);
-  const banner = $('winnerBanner');
-  if (winner) {
-    banner.textContent = `🏆 ${winner.name} chegou a ${winner.score} pontos!`;
-    banner.classList.remove('hidden');
-  } else {
-    banner.classList.add('hidden');
-  }
-  $('rankingList').innerHTML = players.length ? players.map((p, i) => `
-    <div class="rank-card ${i === 0 ? 'first' : ''}">
-      <div class="position">${i + 1}</div>
-      <div class="player-name">${escapeHtml(p.name)}</div>
-      <div class="points">${p.score}<span>pts</span></div>
-    </div>`).join('') : '<p class="subtitle">Adicione participantes para começar.</p>';
-}
-
-function renderRound() {
-  $('roundInputs').innerHTML = state.players.map((p, i) => {
-    const round = state.round[p.id] || { points: '', busted: false };
-    return `
-      <div class="round-row">
-        <div class="player-row-inline" style="display:flex;align-items:center;gap:12px;">
-          <div class="avatar" style="background:${colors[i % colors.length]}">👤</div>
-          <div class="player-name">${escapeHtml(p.name)}</div>
-        </div>
-        <input inputmode="numeric" pattern="[0-9]*" class="score-input" data-points="${p.id}" placeholder="0" value="${round.busted ? 0 : escapeHtml(String(round.points ?? ''))}" ${round.busted ? 'disabled' : ''}/>
-        <button class="bust-btn ${round.busted ? 'active' : ''}" data-bust="${p.id}">Estourou</button>
-      </div>`;
-  }).join('');
-}
-
-function addPlayer() {
-  const input = $('playerNameInput');
-  const name = input.value.trim();
-  if (!name) return;
-  state.players.push({ id: uid(), name, score: 0 });
-  input.value = '';
-  saveState(); render(); input.focus();
-}
-
-function saveRound() {
-  const snapshot = JSON.parse(JSON.stringify(state.players));
-  const entries = state.players.map(p => {
-    const round = state.round[p.id] || { points: 0, busted: false };
-    const points = round.busted ? 0 : Math.max(0, Number(round.points || 0));
-    return { id: p.id, name: p.name, points, busted: !!round.busted };
-  });
-  state.players = state.players.map(p => {
-    const entry = entries.find(e => e.id === p.id);
-    return { ...p, score: p.score + (entry?.points || 0) };
-  });
-  state.history.push({ at: new Date().toISOString(), before: snapshot, entries });
-  state.round = {};
-  saveState(); setScreen('ranking');
-}
-
-function undoRound() {
-  const last = state.history.pop();
-  if (!last) return;
-  state.players = last.before;
-  state.round = {};
-  saveState(); render();
-}
-
-function resetGame() {
-  if (!confirm('Começar uma nova partida e zerar tudo?')) return;
-  state = defaultState();
-  saveState(); setScreen('participants');
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
-}
-
-document.addEventListener('click', (e) => {
-  const deleteId = e.target.dataset.delete;
-  const bustId = e.target.dataset.bust;
-  const navScreen = e.target.closest('.nav-item')?.dataset.screen;
-  if (deleteId) {
-    state.players = state.players.filter(p => p.id !== deleteId);
-    delete state.round[deleteId];
-    saveState(); render();
-  }
-  if (bustId) {
-    const current = state.round[bustId] || { points: '', busted: false };
-    state.round[bustId] = { points: current.busted ? '' : 0, busted: !current.busted };
-    saveState(); renderRound();
-  }
-  if (navScreen) setScreen(navScreen);
-});
-
-document.addEventListener('input', (e) => {
-  const id = e.target.dataset.points;
-  if (!id) return;
-  state.round[id] = { ...(state.round[id] || {}), points: e.target.value.replace(/\D/g, ''), busted: false };
-  saveState();
-});
-
-$('addPlayerForm').addEventListener('submit', e => { e.preventDefault(); addPlayer(); });
-$('startGameBtn').addEventListener('click', () => setScreen('ranking'));
-$('endRoundBtn').addEventListener('click', () => setScreen('round'));
-$('saveRoundBtn').addEventListener('click', saveRound);
-$('undoBtn').addEventListener('click', undoRound);
-$('resetBtn').addEventListener('click', resetGame);
-$('backBtn').addEventListener('click', () => setScreen(currentScreen === 'round' ? 'ranking' : 'participants'));
-
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
-setScreen(currentScreen);
+const KEY='flip7-score-v2';
+const colors=['#ffd21f','#8b5cf6','#f97316','#2f80ed','#ec4899','#22c55e','#06b6d4','#f43f5e'];
+let state={players:[],rounds:[],started:false,lastFeedback:null};
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function load(){try{state={...state,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){}}
+function total(p){return state.rounds.reduce((s,r)=>s+(r.scores[p.id]||0),0)}
+function ranking(){return [...state.players].map(p=>({...p,total:total(p)})).sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));}
+function screen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.target===id));$('backBtn').style.visibility=id==='participantsScreen'||id==='rankingScreen'?'hidden':'visible';renderAll();}
+function initials(n){return n.trim().slice(0,1).toUpperCase()||'?'}
+function renderParticipants(){const list=$('participantsList');list.innerHTML='';state.players.forEach((p,i)=>{const row=document.createElement('div');row.className='participant-row';row.innerHTML=`<span class="avatar" style="background:${p.color}">${initials(p.name)}</span><span>${p.name}</span><button aria-label="remover">×</button>`;row.querySelector('button').onclick=()=>{state.players=state.players.filter(x=>x.id!==p.id);state.rounds.forEach(r=>delete r.scores[p.id]);save();renderAll();};list.appendChild(row);});$('startGameBtn').disabled=state.players.length<2;}
+function renderRanking(){const r=ranking();$('roundNumber').textContent=state.rounds.length+1;const banner=$('leaderBanner');if(state.lastFeedback){banner.textContent=state.lastFeedback.short;banner.classList.remove('hidden')}else banner.classList.add('hidden');$('rankingList').innerHTML=r.map((p,i)=>`<div class="rank-row ${i===0?'first':''}"><div class="place">${i+1}</div><div class="name">${p.name}${i===0?' <span class="crown">👑</span>':''}</div><div class="score">${p.total}<span class="pts">pts</span></div></div>`).join('')||'<p class="hint center">Adicione participantes para começar.</p>';}
+function renderRound(){ $('roundInputNumber').textContent=state.rounds.length+1; const box=$('scoreInputs'); box.innerHTML=''; ranking().forEach((p,i)=>{const row=document.createElement('div');row.className='score-row';row.dataset.id=p.id;row.innerHTML=`<span class="avatar" style="background:${p.color}">${initials(p.name)}</span><span class="pname">${p.name}</span><input inputmode="numeric" pattern="[0-9]*" value="" placeholder="0"><button class="bomb" aria-label="Estourou">💣</button>`;const input=row.querySelector('input'), bomb=row.querySelector('.bomb');bomb.onclick=()=>{bomb.classList.toggle('active'); if(bomb.classList.contains('active')){input.value=0; input.disabled=true}else{input.disabled=false; input.value=''; input.focus();}};box.appendChild(row);});}
+function renderHistory(){const table=$('historyTable');if(!state.rounds.length){table.innerHTML='<tbody><tr><td>Nenhuma rodada salva.</td></tr></tbody>';return}const head='<thead><tr><th>Rodada</th>'+state.players.map(p=>`<th>${p.name}</th>`).join('')+'<th>Líder</th></tr></thead>';const body='<tbody>'+[...state.rounds].reverse().map(r=>`<tr><td>${r.number}</td>`+state.players.map(p=>`<td>${r.scores[p.id]??0}</td>`).join('')+`<td>👑 ${r.leaderName||''}</td></tr>`).join('')+'</tbody>';const foot='<tfoot><tr><td>Total</td>'+state.players.map(p=>`<td>${total(p)}</td>`).join('')+`<td>${ranking()[0]?.name||''}</td></tr></tfoot>`;table.innerHTML=head+body+foot;}
+function renderFeedback(){const fb=state.lastFeedback;if(!fb)return;$('feedbackTitle').textContent=fb.title;$('feedbackText').textContent=fb.text;$('celebrationIcon').textContent=fb.newLeader?'👑':'🏆';$('feedbackRanking').innerHTML=ranking().map((p,i)=>`<div class="mini-row"><span class="place" style="font-size:28px">${i+1}</span><b>${p.name}</b><span class="m-score">${p.total}</span></div>`).join('')}
+function renderAll(){renderParticipants();renderRanking();renderRound();renderHistory();renderFeedback();}
+function addParticipant(){const input=$('participantName');const name=input.value.trim();if(!name)return;state.players.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()),name,color:colors[state.players.length%colors.length]});input.value='';save();renderAll();input.focus();}
+function saveRound(){if(!state.players.length)return;const before=ranking()[0]?.id;const scores={};document.querySelectorAll('.score-row').forEach(row=>{const id=row.dataset.id;const bomb=row.querySelector('.bomb').classList.contains('active');const val=parseInt(row.querySelector('input').value||'0',10);scores[id]=bomb?0:Math.max(0,isNaN(val)?0:val);});const tmpRound={number:state.rounds.length+1,scores,leaderName:''};state.rounds.push(tmpRound);const afterRank=ranking();tmpRound.leaderName=afterRank[0]?.name||'';const after=afterRank[0]?.id;const leader=afterRank[0];state.lastFeedback={newLeader:before&&after&&before!==after,title:before&&after&&before!==after?'Nova liderança!':'Líder mantido!',text:before&&after&&before!==after?`${leader.name} assumiu o 1º lugar.`:`${leader?.name||'O líder'} continua em 1º.`,short:before&&after&&before!==after?`👑 ${leader.name} assumiu a liderança`:`👑 ${leader?.name||'Líder'} segue em primeiro`};save();screen('feedbackScreen');}
+function undo(){if(!state.rounds.length)return;state.rounds.pop();state.lastFeedback=null;save();renderAll();}
+function reset(){if(confirm('Zerar partida e histórico?')){state.rounds=[];state.started=false;state.lastFeedback=null;save();screen('participantsScreen');}}
+load();
+$('addParticipantBtn').onclick=addParticipant;$('participantName').addEventListener('keydown',e=>{if(e.key==='Enter')addParticipant()});$('startGameBtn').onclick=()=>{state.started=true;save();screen('rankingScreen')};$('goRoundBtn').onclick=()=>screen('roundScreen');$('goHistoryBtn').onclick=()=>screen('historyScreen');$('saveRoundBtn').onclick=saveRound;$('continueBtn').onclick=()=>screen('rankingScreen');$('feedbackHistoryBtn').onclick=()=>screen('historyScreen');$('backRankingBtn').onclick=()=>screen('rankingScreen');$('undoBtn').onclick=undo;$('backBtn').onclick=()=>screen('rankingScreen');$('menuBtn').onclick=()=>$('menuDialog').showModal();$('closeMenuBtn').onclick=()=>$('menuDialog').close();$('resetGameBtn').onclick=()=>{reset();$('menuDialog').close();};document.querySelectorAll('.bottom-nav button').forEach(b=>b.onclick=()=>screen(b.dataset.target));
+renderAll();screen(state.started?'rankingScreen':'participantsScreen');
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
