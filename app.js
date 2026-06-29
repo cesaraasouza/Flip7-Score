@@ -156,6 +156,28 @@ function renderChampions(){
   });
 }
 
+function newGame(keepPlayers=true){
+  state.history=[];
+  state.started=keepPlayers && state.players.length>0;
+  state.gameEnded=false;
+  saveState();
+  closeMenu();
+  go(state.started?'ranking':'players');
+}
+
+function clearScoreData(){
+  const champions=state.champions||[];
+  state={...defaultState(), champions};
+  roundDraft={};
+  lastFeedback=null;
+  saveState();
+  closeMenu();
+  go('players');
+}
+
+function openMenu(){document.getElementById('menuPanel').classList.remove('hidden');}
+function closeMenu(){document.getElementById('menuPanel').classList.add('hidden');}
+
 function undo(){
   if(!state.history.length)return;
   state.history.pop();
@@ -186,6 +208,12 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('feedbackRankingBtn').onclick=()=>go('ranking');
   document.getElementById('feedbackHistoryBtn').onclick=()=>go('history');
   document.getElementById('finishGameBtn').onclick=finishGame;
+  document.getElementById('championsNewGameBtn').onclick=()=>newGame(true);
+  document.getElementById('menuBtn').onclick=openMenu;
+  document.getElementById('menuCloseBtn').onclick=closeMenu;
+  document.getElementById('menuPanel').addEventListener('click',e=>{if(e.target.id==='menuPanel')closeMenu();});
+  document.getElementById('menuNewGameBtn').onclick=()=>newGame(true);
+  document.getElementById('menuClearScoreBtn').onclick=()=>{if(confirm('Limpar placar, jogadores e rodadas? O histórico de campeões será mantido.')) clearScoreData();};
   document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
   if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));}
   go(state.started?'ranking':'players');
