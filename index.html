@@ -10,6 +10,15 @@
 </head>
 <body>
   <div class="app">
+    <div class="menu-panel hidden" id="menuPanel">
+      <div class="menu-card">
+        <div class="menu-title">Menu do placar</div>
+        <button id="menuNewGameBtn">🆕 Nova partida</button>
+        <button id="menuClearScoreBtn">🧹 Limpar placar e jogadores</button>
+        <button id="menuCloseBtn">Fechar</button>
+        <p>Nova partida mantém os participantes e o histórico de campeões. Limpar placar remove participantes, rodadas e placar atual, mas mantém os campeões salvos.</p>
+      </div>
+    </div>
     <header class="topbar">
       <button class="icon-btn" id="menuBtn">☰</button>
       <div class="logo">FLIP<span>7</span></div>
@@ -93,6 +102,7 @@
           <div></div>
         </div>
         <div id="championsList" class="champions-list"></div>
+        <button class="primary" id="championsNewGameBtn">🆕 Nova partida</button>
       </section>
     </main>
 
