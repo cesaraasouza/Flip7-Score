@@ -1,92 +1,130 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#080713" />
-  <title>Flip 7 Score</title>
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <div id="app" class="app-shell">
-    <header class="topbar">
-      <button class="icon-btn" id="backBtn" aria-label="Voltar">‹</button>
-      <div class="brand" role="img" aria-label="Flip 7">FLIP<span>7</span></div>
-      <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
-    </header>
+const STORAGE_KEY = 'flip7-spa-v3';
+const colors = ['#ffc400','#8a3ffc','#ff7426','#2583ff','#e9499c','#24c45a','#b0b7c9','#ff9f0a'];
+let state = loadState();
+let roundDraft = {};
+let lastFeedback = null;
 
-    <main>
-      <section class="screen active" id="participantsScreen" data-title="Participantes">
-        <div class="screen-title">
-          <h1>Participantes</h1>
-          <p>Digite os nomes para começar.</p>
-        </div>
-        <div class="card participant-add">
-          <input id="participantName" autocomplete="off" placeholder="Nome do participante" />
-          <button id="addParticipantBtn" class="btn secondary">Adicionar</button>
-        </div>
-        <div id="participantsList" class="list"></div>
-        <button id="startGameBtn" class="btn primary wide">▶ Iniciar partida</button>
-      </section>
+function defaultState(){ return { players: [], started:false, round:1, history:[], champions:[], gameEnded:false }; }
+function loadState(){ try { return { ...defaultState(), ...(JSON.parse(localStorage.getItem(STORAGE_KEY))||{}) }; } catch { return defaultState(); } }
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function uid(){ return crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()+Math.random()); }
+function scoreOf(id){ return state.history.reduce((sum,r)=> sum + (Number(r.scores[id])||0), 0); }
+function sortedPlayers(){ return [...state.players].sort((a,b)=> scoreOf(b.id)-scoreOf(a.id)); }
+function roundNumber(){ return state.history.length + 1; }
+function championCandidate(){ const over = sortedPlayers().filter(p=>scoreOf(p.id)>=200); return over.length ? over[0] : null; }
 
-      <section class="screen" id="rankingScreen" data-title="Ranking">
-        <div class="round-pill">Rodada <span id="roundNumber">1</span></div>
-        <div id="leaderBanner" class="leader-banner hidden"></div>
-        <div id="rankingList" class="ranking-table"></div>
-        <div class="action-grid">
-          <button id="goRoundBtn" class="btn gold wide">Encerrar rodada</button>
-          <button id="goHistoryBtn" class="btn outline">▦ Histórico</button>
-          <button id="undoBtn" class="btn outline">↶ Desfazer</button>
-        </div>
-        <p class="hint center">Primeiro a 200 pontos vence.</p>
-      </section>
+function go(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.go===screen));
+  document.getElementById('roundPill').textContent = state.started ? `Rodada ${roundNumber()}` : 'Setup';
+  if(screen==='ranking') renderRanking();
+  if(screen==='players') renderPlayers();
+  if(screen==='round') renderRoundInputs();
+  if(screen==='history') renderHistory();
+  if(screen==='champions') renderChampions();
+}
 
-      <section class="screen" id="roundScreen" data-title="Encerrar Rodada">
-        <div class="screen-title compact">
-          <h1>Encerrar rodada</h1>
-          <p>Rodada <span id="roundInputNumber">1</span> · Digite os pontos.</p>
-        </div>
-        <div id="scoreInputs" class="score-list"></div>
-        <div class="note">💣 toque na bombinha para quem estourou.</div>
-        <button id="saveRoundBtn" class="btn success wide">✓ Salvar e atualizar</button>
-      </section>
+function renderPlayers(){
+  const list = document.getElementById('playersList');
+  list.innerHTML = '';
+  if(!state.players.length) list.innerHTML = '<div class="empty">Nenhum participante ainda.</div>';
+  state.players.forEach((p,i)=>{
+    const row = document.createElement('div'); row.className='player-row';
+    row.innerHTML = `<span style="background:${colors[i%colors.length]}">👤</span><strong>${escapeHtml(p.name)}</strong><button aria-label="Remover">×</button>`;
+    row.querySelector('button').onclick=()=>{ state.players=state.players.filter(x=>x.id!==p.id); saveState(); renderPlayers(); };
+    list.appendChild(row);
+  });
+}
+function renderRanking(){
+  const list = document.getElementById('rankingList'); list.innerHTML='';
+  if(!state.players.length){ list.innerHTML='<div class="empty">Adicione participantes para começar.</div>'; return; }
+  sortedPlayers().forEach((p,i)=>{
+    const s=scoreOf(p.id), diff=s-200;
+    const card=document.createElement('div'); card.className='rank-card '+(i===0?'leader':'');
+    card.innerHTML=`<div class="rank-number">${i+1}</div><div class="rank-name">${escapeHtml(p.name)}</div><div class="rank-score">${s}<span class="pts-label">pts</span> <small>(${diff>=0?'+':''}${diff})</small></div>`;
+    list.appendChild(card);
+  });
+}
+function renderRoundInputs(){
+  document.getElementById('roundSubtitle').textContent = `Rodada ${roundNumber()} · Digite os pontos de cada jogador.`;
+  const box=document.getElementById('roundInputs'); box.innerHTML=''; roundDraft={};
+  state.players.forEach((p,i)=>{
+    roundDraft[p.id]={points:'', bust:false};
+    const row=document.createElement('div'); row.className='round-line';
+    row.innerHTML=`<div class="round-name"><span class="avatar" style="background:${colors[i%colors.length]}">👤</span><span>${escapeHtml(p.name)}</span></div><input inputmode="numeric" pattern="[0-9]*" type="number" min="0" placeholder="0"><button class="bomb-btn" aria-label="Estourou">💣</button>`;
+    const input=row.querySelector('input'); const bomb=row.querySelector('button');
+    input.oninput=()=>{ roundDraft[p.id].points=input.value; if(input.value && Number(input.value)>0){ roundDraft[p.id].bust=false; bomb.classList.remove('active'); }};
+    bomb.onclick=()=>{ roundDraft[p.id].bust=!roundDraft[p.id].bust; bomb.classList.toggle('active',roundDraft[p.id].bust); if(roundDraft[p.id].bust){ input.value=0; roundDraft[p.id].points=0; }};
+    box.appendChild(row);
+  });
+}
+function saveRound(){
+  if(!state.players.length) return;
+  const beforeLeader=sortedPlayers()[0];
+  const scores={};
+  state.players.forEach(p=>{ const d=roundDraft[p.id]||{}; scores[p.id]=d.bust ? 0 : Math.max(0, Number(d.points)||0); });
+  state.history.push({ round:roundNumber(), date:new Date().toISOString(), scores });
+  saveState();
+  const afterLeader=sortedPlayers()[0];
+  const champ=championCandidate();
+  if(champ){ lastFeedback={type:'champion', player:champ, score:scoreOf(champ.id)}; }
+  else if(beforeLeader && afterLeader && beforeLeader.id!==afterLeader.id){ lastFeedback={type:'newLeader', player:afterLeader, score:scoreOf(afterLeader.id)}; }
+  else { lastFeedback={type:'sameLeader', player:afterLeader, score:scoreOf(afterLeader.id)}; }
+  renderFeedback(); go('feedback');
+}
+function renderFeedback(){
+  const title=document.getElementById('feedbackTitle'), text=document.getElementById('feedbackText'), card=document.getElementById('feedbackCard'), finish=document.getElementById('finishGameBtn');
+  if(!lastFeedback) return;
+  const p=lastFeedback.player;
+  if(lastFeedback.type==='champion'){
+    title.textContent='Temos um campeão!'; text.textContent='Maior pontuação acima de 200 é a campeã.'; finish.classList.remove('hidden');
+  } else if(lastFeedback.type==='newLeader'){
+    title.textContent='Nova liderança!'; text.textContent=`${p.name} assumiu o primeiro lugar.`; finish.classList.add('hidden');
+  } else {
+    title.textContent='Líder mantido!'; text.textContent=`${p.name} continua na liderança.`; finish.classList.add('hidden');
+  }
+  card.innerHTML=`<div class="name">${escapeHtml(p.name)}</div><div class="score">${lastFeedback.score}</div><div>pontos</div>`;
+}
+function finishGame(){
+  const champ=championCandidate(); if(!champ) return;
+  state.champions.unshift({ id:uid(), playerName:champ.name, score:scoreOf(champ.id), date:new Date().toISOString(), round:state.history.length });
+  state.gameEnded=true; saveState(); renderChampions(); go('champions');
+}
+function renderHistory(){
+  const table=document.getElementById('historyTable');
+  if(!state.history.length){ table.innerHTML='<tbody><tr><td>Nenhuma rodada salva.</td></tr></tbody>'; return; }
+  const players=state.players;
+  const header=`<thead><tr><th>Rodada</th>${players.map(p=>`<th>${escapeHtml(p.name)}</th>`).join('')}</tr></thead>`;
+  const body=`<tbody>${[...state.history].reverse().map(r=>`<tr><td>${r.round}</td>${players.map(p=>`<td>${r.scores[p.id]===0?'💣':(r.scores[p.id]??0)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  const foot=`<tfoot><tr><td>Total</td>${players.map(p=>`<td>${scoreOf(p.id)}</td>`).join('')}</tr></tfoot>`;
+  table.innerHTML=header+body+foot;
+}
+function renderChampions(){
+  const box=document.getElementById('championsList'); box.innerHTML='';
+  if(!state.champions.length){ box.innerHTML='<div class="empty">Nenhuma partida finalizada ainda.</div>'; return; }
+  state.champions.forEach((c,i)=>{
+    const div=document.createElement('div'); div.className='champ-card '+(i===0?'first':'');
+    div.innerHTML=`<div class="medal">${i===0?'🏆':(i+1)+'º'}</div><div><div class="champ-name">${escapeHtml(c.playerName)}</div><div class="champ-meta">${formatDate(c.date)} · Rodada ${c.round}</div></div><div class="champ-score">${c.score}<br><small>pts</small></div>`;
+    box.appendChild(div);
+  });
+}
+function undo(){ if(!state.history.length) return; state.history.pop(); state.gameEnded=false; saveState(); renderRanking(); }
+function escapeHtml(s){ return String(s).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m])); }
+function formatDate(iso){ return new Intl.DateTimeFormat('pt-BR').format(new Date(iso)); }
 
-      <section class="screen" id="feedbackScreen" data-title="Feedback">
-        <div class="celebration" id="celebrationIcon">👑</div>
-        <h1 id="feedbackTitle" class="feedback-title">Nova líder!</h1>
-        <p id="feedbackText" class="feedback-text"></p>
-        <div id="feedbackRanking" class="mini-ranking"></div>
-        <button id="continueBtn" class="btn primary wide">Continuar</button>
-        <button id="feedbackHistoryBtn" class="btn ghost wide">Ver histórico</button>
-      </section>
+document.getElementById('addPlayerBtn').onclick=()=>{ const inp=document.getElementById('playerNameInput'); const name=inp.value.trim(); if(!name) return; state.players.push({id:uid(),name}); inp.value=''; saveState(); renderPlayers(); };
+document.getElementById('playerNameInput').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addPlayerBtn').click(); });
+document.getElementById('startGameBtn').onclick=()=>{ if(!state.players.length) return; state.started=true; saveState(); go('ranking'); };
+document.getElementById('goRoundBtn').onclick=()=>go('round');
+document.getElementById('goHistoryBtn').onclick=()=>go('history');
+document.getElementById('goChampionsBtn').onclick=()=>go('champions');
+document.getElementById('undoBtn').onclick=undo;
+document.getElementById('saveRoundBtn').onclick=saveRound;
+document.getElementById('feedbackRankingBtn').onclick=()=>go('ranking');
+document.getElementById('feedbackHistoryBtn').onclick=()=>go('history');
+document.getElementById('finishGameBtn').onclick=finishGame;
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
 
-      <section class="screen" id="historyScreen" data-title="Histórico">
-        <div class="screen-title compact">
-          <h1>Histórico</h1>
-          <p>Todas as rodadas da partida.</p>
-        </div>
-        <div class="history-wrap">
-          <table id="historyTable" class="history-table"></table>
-        </div>
-        <button id="backRankingBtn" class="btn primary wide">Voltar ao ranking</button>
-      </section>
-    </main>
-
-    <nav class="bottom-nav">
-      <button data-target="participantsScreen">👥<span>Participantes</span></button>
-      <button data-target="rankingScreen">🏆<span>Ranking</span></button>
-      <button data-target="roundScreen">✏️<span>Rodada</span></button>
-      <button data-target="historyScreen">▦<span>Histórico</span></button>
-    </nav>
-  </div>
-
-  <dialog id="menuDialog">
-    <h2>Partida</h2>
-    <button id="resetGameBtn" class="btn danger wide">Zerar partida</button>
-    <button id="closeMenuBtn" class="btn outline wide">Fechar</button>
-  </dialog>
-
-  <script src="app.js"></script>
-</body>
-</html>
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{})); }
+go(state.started ? 'ranking' : 'players');
